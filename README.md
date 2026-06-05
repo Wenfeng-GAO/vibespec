@@ -137,5 +137,6 @@ GSD Core 是一个很强的工程流程底座。它已经覆盖了 phase plannin
 
 ## 相关笔记
 
+- [工作流规格](docs/workflow.md)
 - [研究笔记](docs/research-notes.md)
 - [中文分析笔记](docs/analysis.zh-CN.md)
