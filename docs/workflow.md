@@ -2,9 +2,9 @@
 
 ## 结论
 
-VibeSpec 第一版采用 **TypeScript CLI + 配置文件 + 状态文件 + Agent workflow pack** 的形态。
+VibeSpec 的最终交付物是 **Codex Skill + Claude Skill + 共享 repo-local protocol + TypeScript validators**。
 
-核心定位是 agent-neutral：VibeSpec 不直接替代 coding agent，而是管理阶段、产物、门禁、状态和回退。第一版需要同时支持 Codex 和 Claude Code，后续再扩展到 Cursor、Gemini CLI、Windsurf 等工具。
+核心定位是 agent-neutral：VibeSpec 不直接替代 coding agent，也不做一个独立运行 agent 的 CLI。它把 workflow 安装进 Codex 和 Claude Code 的 skill 体系里，同时用 `.vibespec/` 协议统一阶段、产物、门禁、状态和回退。
 
 ## 设计目标
 
@@ -12,51 +12,109 @@ VibeSpec 第一版采用 **TypeScript CLI + 配置文件 + 状态文件 + Agent 
 - 在写代码前强制产出 PRD、设计规约和技术方案。
 - 用状态机避免 agent 跳阶段、漏产物或一口气盲跑到底。
 - 用门禁把“看起来完成了”改成有证据的 pass/fail 判断。
-- 保持 CLI 足够轻，让 solo developer 可以在真实项目里快速试跑。
+- 让 Codex 和 Claude Code 在不同运行时里遵守同一套 workflow。
+- 用 TypeScript validators 承担确定性检查，减少纯提示词约束的不稳定性。
 
 ## 非目标
 
-- 第一版不做完整 web dashboard。
-- 第一版不做多人协作和权限系统。
-- 第一版不做通用 app builder。
-- 第一版不内置复杂项目管理系统。
-- 第一版不强制绑定某一个 coding agent。
+- 不做完整 web dashboard。
+- 不做多人协作和权限系统。
+- 不做通用 app builder。
+- 不内置复杂项目管理系统。
+- 不做独立 agent runner。
+- 不把 CLI 作为核心产品形态。
 
-## 第一版架构
+## 最终架构
 
 ```mermaid
 flowchart LR
-    U["用户"] --> CLI["VibeSpec CLI"]
-    CLI --> CFG["vibespec.config.ts"]
-    CLI --> STATE[".vibespec/state.json"]
-    CLI --> ART["规格产物"]
-    CLI --> GATE["门禁检查"]
-    CLI --> ADAPTER["Agent Adapter"]
-    ADAPTER --> CODEX["Codex"]
-    ADAPTER --> CLAUDE["Claude Code"]
+    U["用户"] --> CODEX["Codex Skill"]
+    U --> CLAUDE["Claude Skill"]
+    CODEX --> PROTOCOL[".vibespec/ Protocol"]
+    CLAUDE --> PROTOCOL
+    PROTOCOL --> STATE["state.json"]
+    PROTOCOL --> ART["规格产物"]
+    PROTOCOL --> RUNS["runs"]
+    PROTOCOL --> GATES["gate reports"]
+    PROTOCOL --> CR["change requests"]
+    CODEX --> VAL["TypeScript Validators"]
+    CLAUDE --> VAL
 ```
 
-### CLI
+### Codex Skill
 
-CLI 负责：
+Codex Skill 负责：
 
-- 初始化 VibeSpec 项目；
-- 读取配置和状态；
-- 推进阶段；
-- 生成当前阶段提示词和 checklist；
-- 执行门禁；
-- 记录用户确认、失败次数和 override；
-- 输出下一步动作。
+- 在 Codex 中触发 VibeSpec 工作流；
+- 读取 `.vibespec/state.json` 和当前产物；
+- 按当前阶段生成或更新 artifact；
+- 运行或调用 TypeScript validators；
+- 生成 run report 和 gate report；
+- 在满足条件时更新状态文件；
+- 在需要人工确认时停止并等待用户明确确认。
 
-### 配置文件
+### Claude Skill
 
-推荐文件名：`vibespec.config.ts`。
+Claude Skill 负责同一套 workflow 在 Claude Code 中的执行。
+
+它可以使用 Claude Code 自己的 skill 组织方式，但必须遵守同一套 repo-local protocol、artifact 模板、gate report 格式和状态流转规则。
+
+### Repo-local Protocol
+
+推荐目录：
+
+```text
+.vibespec/
+  state.json
+  config.json
+  runs/
+  gates/
+  change-requests/
+  overrides/
+docs/vibespec/
+  PRD.md
+  DESIGN.md
+  TECH.md
+  TASKS.md
+  VERIFY.md
+```
+
+协议内容：
+
+- 当前阶段；
+- artifact 版本；
+- artifact 依赖关系；
+- 阶段确认状态；
+- gate report；
+- run report；
+- change request；
+- override 记录；
+- 失败次数；
+- 下一步推荐动作。
+
+### TypeScript Validators
+
+TypeScript validators 负责确定性检查：
+
+- 状态文件 schema；
+- 配置文件 schema；
+- artifact 是否存在；
+- artifact 必填章节是否存在；
+- gate report 格式是否合法；
+- artifact 依赖是否失效；
+- override 是否记录完整；
+- task 失败次数是否触发人工介入。
+
+Validators 不负责判断“产品方向是否正确”或“审美是否好”，但要强制 agent 输出足够证据，让人工或 LLM reviewer 能基于 rubric 判断。
+
+## 配置文件
+
+推荐文件名：`.vibespec/config.json`。
 
 配置内容：
 
 - 项目类型；
-- 默认 agent；
-- 支持的 agent adapter；
+- 启用的 skill；
 - 产物路径；
 - 阶段启用状态；
 - 验证命令；
@@ -64,7 +122,7 @@ CLI 负责：
 - override 策略；
 - task 粒度限制。
 
-### 状态文件
+## 状态文件
 
 推荐路径：`.vibespec/state.json`。
 
@@ -80,16 +138,9 @@ CLI 负责：
 - override 记录；
 - 下一步推荐动作。
 
-### Agent Adapter
+状态文件是跨 Codex 和 Claude Code 的共享事实来源。
 
-Agent adapter 负责把 VibeSpec 的阶段指令转成具体 agent 可执行的工作方式。
-
-第一版至少支持：
-
-- `codex`；
-- `claude-code`。
-
-Adapter 只负责执行方式差异，不改变 VibeSpec 的核心流程、产物和门禁规则。
+Agent 不应该只凭主观判断推进状态。任何状态推进都必须有对应 artifact、run report、gate report；人工确认型门禁还必须有用户明确确认记录。
 
 ## 五阶段状态机
 
@@ -378,59 +429,60 @@ QA 工程师。
 - 风险说明；
 - 后续补偿动作。
 
-## CLI 命令草案
+## Skill 入口草案
 
-### `vibespec init`
+### 初始化 VibeSpec
 
-初始化配置文件、状态目录和默认产物目录。
+创建 `.vibespec/` 目录、默认配置、状态文件和 `docs/vibespec/` 产物目录。
 
-### `vibespec status`
+### 查看状态
 
 展示当前阶段、已完成产物、门禁状态、失败次数和下一步动作。
 
-### `vibespec next`
+### 推进阶段
 
 推进到下一阶段。只有当前阶段门禁通过后才允许执行。
 
-### `vibespec gate`
+### 执行门禁
 
 执行当前阶段门禁检查，并记录 pass/fail 结果。
 
-### `vibespec run-task`
+### 执行 task
 
 执行或生成当前 task 的 agent 指令。
 
-### `vibespec verify`
+### 集成验证
 
 执行集成验证，生成或更新 `VERIFY.md`。
 
-### `vibespec override`
+### Override
 
 显式跳过某个门禁，并记录原因和风险。
 
 ## TypeScript 实现建议
 
-第一版可以使用 TypeScript 实现 CLI：
+TypeScript 不作为核心产品形态，而是用于 deterministic validators 和辅助脚本：
 
-- CLI framework：`commander` 或 `cac`；
-- 配置加载：支持 `vibespec.config.ts`；
 - schema 校验：`zod`；
 - 文件系统：Node.js `fs/promises`；
 - 状态文件：JSON；
-- Markdown 产物：先用模板生成，后续再支持结构化 AST；
+- Markdown 产物：先检查必填章节，后续再支持结构化 AST；
 - 测试：Vitest；
-- 打包：`tsx` 开发，后续用 `tsup` 或同类工具打包。
+- 脚本运行：`tsx` 或打包后的 Node.js 脚本；
+- 发布：随 Codex skill 和 Claude skill 分发。
 
 实现原则：
 
 - 先做最小可跑通版本；
-- 状态机逻辑和 agent adapter 分离；
-- CLI 输出要清楚说明当前阶段、阻塞原因和下一步动作；
-- 不为尚未接入的 agent 提前写复杂抽象。
+- skill 指令和 protocol 规则分离；
+- validators 只做确定性检查；
+- 状态更新必须能追溯到 run report 和 gate report；
+- 不为尚未支持的 agent 提前写复杂抽象。
 
-## 第一版成功标准
+## 首个可用版本成功标准
 
-- 能在一个空项目中执行 `vibespec init`。
+- 能通过 Codex Skill 初始化一个 VibeSpec 项目。
+- 能通过 Claude Skill 初始化同一套 VibeSpec 项目结构。
 - 能从 idea 生成并确认 `PRD.md`。
 - 能基于 PRD 生成并确认 `DESIGN.md`。
 - 能生成 `TECH.md` 并通过 checklist。
@@ -439,12 +491,14 @@ QA 工程师。
 - 能生成 `VERIFY.md`。
 - 能阻止未通过门禁的阶段跳转。
 - 能通过 override 显式跳过门禁并留下记录。
-- 能同时生成 Codex 和 Claude Code 可用的阶段指令。
+- Codex 和 Claude Code 能读写同一套 `.vibespec/` protocol。
+- TypeScript validators 能检查状态、产物和 gate report 的基本合法性。
 
 ## 下一步
 
-1. 定义 `vibespec.config.ts` 的 schema。
+1. 定义 `.vibespec/config.json` 的 schema。
 2. 定义 `.vibespec/state.json` 的 schema。
-3. 定义 artifact templates。
-4. 定义 Codex adapter 和 Claude Code adapter 的最小输出格式。
-5. 搭建 TypeScript CLI 项目骨架。
+3. 定义 run report 和 gate report 格式。
+4. 定义 Codex Skill 目录结构和 `SKILL.md`。
+5. 定义 Claude Skill 目录结构和 `SKILL.md`。
+6. 实现第一批 TypeScript validators。

@@ -6,6 +6,8 @@ VibeSpec 不应该做成又一个 Lovable、Bolt 或 v0，而应该做成一个�
 
 它的核心价值是：在 AI coding agent 开始大量写代码之前，帮助用户把产品想法变成清晰的 PRD、功能设计、页面/流程设计、实现计划和验收标准；在实现过程中提供阶段性 checkpoint；在完成前用可验证证据判断质量是否达标。
 
+架构更新：VibeSpec 的最终交付物明确为 **Codex Skill + Claude Skill + 共享 repo-local protocol + TypeScript validators**。它不是独立 CLI，也不是单纯 prompt pack。
+
 ## 当前问题
 
 1. **需求不清楚**
@@ -73,9 +75,9 @@ VibeSpec 不应该做成又一个 Lovable、Bolt 或 v0，而应该做成一个�
    - 可访问性和响应式；
    - 用户验收。
 
-## MVP 建议
+## 近期建设重点
 
-第一版优先做三件事：
+当前优先做四件事：
 
 1. **Spec Builder**
    - 把想法生成 product brief、PRD、功能设计、页面清单、用户流程和验收标准。
@@ -83,10 +85,13 @@ VibeSpec 不应该做成又一个 Lovable、Bolt 或 v0，而应该做成一个�
 2. **Checkpoint Workspace**
    - 给 PRD、设计、计划、实现、QA、UAT 设置明确 review 节点。
 
-3. **Quality Gates**
+3. **Skill-native Workflow**
+   - 用 Codex skill 和 Claude skill 直接驱动 agent 工作，并共享 `.vibespec/` 协议。
+
+4. **Quality Gates**
    - 对产品、设计、工程、浏览器交互和最终验收提供 pass/fail 标准。
 
-这三件事正好对应最初的三个痛点：需求不清、质量不稳、反馈太晚。
+这些建设重点正好对应最初的三个痛点：需求不清、质量不稳、反馈太晚。
 
 ## GSD Core 是否符合
 

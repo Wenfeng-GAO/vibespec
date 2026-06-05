@@ -8,6 +8,8 @@
 
 VibeSpec 的机会不是替代 Lovable、Bolt、Replit Agent、v0、Cursor、Claude Code、Codex 或 Gemini CLI，而是编排这些工具周围的产品定义、设计决策、实现节奏和验收流程。
 
+架构更新：VibeSpec 的最终交付形态明确为 Codex Skill + Claude Skill + 共享 repo-local protocol + TypeScript validators，而不是独立 CLI。
+
 ## 用户痛点
 
 1. **产品定义不清**
@@ -192,7 +194,7 @@ VibeSpec 应该是一个面向 vibe coding 的 **workflow layer**：
 
 这些 skill 说明：VibeSpec 可以先从 curated workflow 和 skill pack 形态开始，再逐步演进为完整产品 UI。
 
-## 推荐 MVP 形态
+## 近期建设重点
 
 ### 1. Spec Builder
 
@@ -209,7 +211,11 @@ VibeSpec 应该是一个面向 vibe coding 的 **workflow layer**：
 - risks；
 - open decisions。
 
-### 2. Checkpoint Workspace
+### 2. Skill-native Workflow
+
+用 Codex Skill 和 Claude Skill 驱动同一套阶段流程，并共享 `.vibespec/` 状态、runs、gate reports 和 change requests。
+
+### 3. Checkpoint Workspace
 
 创建明确停顿点：
 
@@ -221,7 +227,7 @@ VibeSpec 应该是一个面向 vibe coding 的 **workflow layer**：
 - browser QA review；
 - UAT approval。
 
-### 3. Quality Gates
+### 4. Quality Gates
 
 每个阶段都需要 pass/fail evidence：
 
