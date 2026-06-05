@@ -4,6 +4,8 @@ VibeSpec 是一个面向 AI coding agent 的工作流层，目标是帮助用户
 
 它不想做成又一个 AI app builder。它要解决的是：把一个模糊想法变成清晰的产品规格、分阶段实现任务、可见 checkpoint 和明确质量门禁，让 vibe coding 不再只靠 LLM 自由发挥。
 
+第一版产品可以先收敛成 **CLI 工具 + 配置文件 + Agent workflow pack**：通过状态机和强约束门禁，驱动 AI coding agent 按阶段完成产品定义、设计规约、技术方案、分步实现和集成验证。
+
 ## 问题
 
 Vibe coding 在开始阶段很快，但中等规模产品很容易漂移：
@@ -30,21 +32,47 @@ flowchart LR
 
 它位于 Codex、Claude Code、Cursor、Gemini CLI、Windsurf 等 coding agent 之上，负责定义要做什么、什么时候允许继续、每个阶段如何验收。
 
+第一版可以先适配一个主 agent，但核心设计应该保持 agent-neutral：VibeSpec 管理流程、状态和门禁，具体代码实现交给不同 coding agent。
+
+## 第一版形态
+
+VibeSpec 的 MVP 推荐先做成开发者可直接安装和试跑的工作流框架：
+
+- **CLI 工具**：初始化项目、推进阶段、检查状态、执行门禁、生成修复任务。
+- **配置文件**：定义项目类型、阶段策略、产物路径、验证命令、门禁规则和允许的例外。
+- **状态文件**：持久化当前阶段、已确认产物、失败记录、用户确认和下一步动作。
+- **Agent workflow pack**：把产品经理、设计师、Tech Lead、执行工程师、QA 工程师等角色沉淀为可复用指令和 checklist。
+- **强约束门禁**：默认不可跳过；确实需要跳过时，必须显式记录 override 原因。
+
 ## 核心工作流
 
-1. **Define**：把想法转成 product brief、PRD、目标用户、用户旅程、功能列表、非目标和 MVP 范围。
-2. **Design**：产出信息架构、页面清单、核心流程、交互状态、视觉方向和 design contract。
-3. **Plan**：把规格拆成实现阶段、任务、依赖、风险和验证命令。
-4. **Build**：让 coding agent 分阶段工作，每个阶段都停下来 review，而不是一口气盲跑到底。
-5. **Verify**：检查需求覆盖、浏览器交互、视觉质量、可访问性和用户验收结果。
+VibeSpec 使用 5 阶段门禁流水线：
+
+1. **产品定义**：从一句话想法生成 `PRD.md`，覆盖目标用户、核心场景、P0/P1/P2 功能、成功标准和不做什么。门禁是人工确认，确认前不允许写代码。
+2. **设计规约**：基于已确认 PRD 生成 `DESIGN.md`，覆盖路由表、页面清单、组件树、交互状态、数据流向和视觉方向。门禁是人工确认，确认前不进入技术方案。
+3. **技术方案**：基于 `PRD.md` 和 `DESIGN.md` 生成 `TECH.md`，覆盖技术栈、目录结构、数据模型、API 契约、依赖列表和验证命令。门禁是 checklist 自检，关键技术选择可要求用户确认。
+4. **分步实现**：基于 PRD、DESIGN 和 TECH 拆分独立 task。每个 task 尽量在 fresh context 中执行，完成后必须自检并输出 summary；连续 3 次失败时转人工介入。
+5. **集成验证**：基于全部代码、PRD 和 DESIGN 生成 `VERIFY.md`，检查功能完整性、交互状态覆盖、视觉一致性、技术质量和浏览器 QA 证据。门禁是人工确认；不通过则生成修复 task 回到分步实现。
+
+这个流程的重点不是“建议 agent 按顺序做”，而是让阶段推进变成可恢复、可检查、默认不可跳过的状态机。
+
+## 反模式防御
+
+VibeSpec 应该把常见 vibe-coding 失败模式写进规则里：
+
+- 产品定义阶段：不写代码，不跳过边界讨论，不擅自推断核心需求。
+- 设计规约阶段：不写样式代码，不跳过 loading、empty、error、edge case 等交互状态；没有路由表不进入技术方案。
+- 技术方案阶段：不引入未验证依赖，不跳过数据模型和 API 契约；目录结构必须能对应设计规约。
+- 分步实现阶段：不一口气改太大范围，不写 TODO 留坑，不跨 task 随意跳转。
+- 集成验证阶段：不能只说“看起来完成了”，必须给出需求覆盖、浏览器验证、视觉检查和失败修复记录。
 
 ## MVP
 
 第一版应该优先做三件高杠杆的事：
 
-- **Spec Builder**：把 idea 转成 PRD、功能规格、页面清单、用户流程和验收标准。
-- **Checkpoint Workspace**：围绕 PRD、设计、计划、实现和验证建立阶段性 review。
-- **Quality Gates**：提供产品、设计、工程、浏览器 QA 和最终用户验收的质量门禁。
+- **Spec Builder**：把 idea 转成 `PRD.md`、`DESIGN.md`、`TECH.md`、任务列表和验收标准。
+- **Stateful Workflow Runner**：用 CLI 和状态文件追踪当前阶段、门禁结果、失败次数、用户确认和下一步动作。
+- **Quality Gates**：提供产品定义、设计规约、技术方案、分步实现、浏览器 QA 和最终用户验收的 pass/fail 门禁。
 
 这能避开和全栈 app builder 正面竞争，直接解决用户在 vibe coding 中最痛的控制感、清晰度和返工问题。
 
@@ -75,6 +103,8 @@ VibeSpec 不应该只是：
 
 > 一个 spec-first、checkpoint-driven 的 workflow layer，帮助用户把 AI 生成原型推进成产品质量更稳定的 app。
 
+第一阶段市场定位可以更窄：先服务 solo developer，优先解决“我自己用 AI agent 做中等规模产品时如何少返工”。等 CLI/workflow 跑通后，再考虑做 dashboard、模板市场或多人协作。
+
 ## GSD Core 适配度
 
 GSD Core 是一个很强的工程流程底座。它已经覆盖了 phase planning、execution、UI spec、verification 和 UAT，比大多数 vibe-coding 流程更完整。
@@ -93,12 +123,13 @@ GSD Core 是一个很强的工程流程底座。它已经覆盖了 phase plannin
 
 ## 初始路线图
 
-- 定义 VibeSpec 的 artifact model：brief、PRD、feature spec、design contract、implementation plan、verification report、UAT report。
-- 构建常见 app/web 类型模板：SaaS、CRM、内部工具、marketplace、社区、AI app、dashboard、内容产品。
-- 建立产品、设计、工程 review rubrics。
-- 创建可以驱动现有 coding agent 的 staged workflow。
-- 增加基于浏览器的验证：截图、路由检查、交互检查、视觉审查。
-- 增加 dashboard：展示阶段状态、风险、未决问题、需求覆盖和用户审批。
+- 定义 artifact model：`PRD.md`、`DESIGN.md`、`TECH.md`、`TASKS.md`、`VERIFY.md` 和状态文件。
+- 设计 CLI 命令：init、status、next、gate、run-task、verify、override。
+- 实现状态机：阶段流转、门禁结果、失败次数、用户确认、回退路径。
+- 建立产品、设计、技术、实现和 QA checklist。
+- 跑通一个真实中等规模 app/web 项目的端到端试用。
+- 再扩展常见 app/web 类型模板：SaaS、CRM、内部工具、marketplace、社区、AI app、dashboard、内容产品。
+- 后续增加 dashboard：展示阶段状态、风险、未决问题、需求覆盖和用户审批。
 
 ## 状态
 
