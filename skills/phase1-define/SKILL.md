@@ -30,10 +30,10 @@ Define 阶段完成的唯一标准是:
 
 ### 产物
 
-- 主产物: `PRD.md`
-- 可选辅助产物: `docs/phase1-define-notes.md`
+- 主产物: `docs/vibespec/PRD.md`（自动创建 `docs/vibespec/` 目录）
+- 辅助产物: `docs/phase1-define-notes.md`（强制——用于 checkpoint 恢复和研究持久化）
 
-不要创建 `.vibespec/state.json`。当前目标是做完整可用的 skill，不做 CLI 状态机。
+Phase 1 使用 `PRD.md` frontmatter 作为内部状态机制（8 步工作流中的状态追踪）。不创建 `.vibespec/state.json` 作为内部状态机——但在 Step 8 完成时会写入最小条目，供 Phase 2 通过标准协议获知 Define 阶段已完成。
 
 ## 硬约束
 
@@ -116,7 +116,7 @@ Define 阶段完成的唯一标准是:
 | 风险与假设 | 用户风险、市场风险、体验风险、合规/数据风险、未验证假设 |
 | 对标模式 | 竞品/同类工具的常见结构、差异化机会、不能盲目照搬的点 |
 
-研究结论只用于后续提问和 PRD 草稿，不直接替用户确认 P0/P1。
+研究结论写入 `docs/phase1-define-notes.md`（作为 checkpoint，防止会话中断丢失），只用于后续提问和 PRD 草稿，不直接替用户确认 P0/P1。
 
 ### Step 2: 产品压力测试
 
@@ -195,7 +195,7 @@ Define 阶段完成的唯一标准是:
 | 完成信号 | 每个 P0 是否有明确完成判断 |
 | 占位符检测 | 是否存在 TBD、TODO、空泛形容词或未解释术语 |
 
-对 `Missing` 和关键 `Partial` 项继续提问。没有硬性 5 题上限，但每个追问都必须能显著降低 PRD 返工风险。
+对 `Missing` 和关键 `Partial` 项继续提问。每个追问都必须能显著降低 PRD 返工风险。
 
 ### Step 5: 写入或更新 PRD.md
 
@@ -332,14 +332,13 @@ PRD 写作要求:
 - 是否术语一致；
 - 是否 `PRD.md` 状态仍为 `draft`。
 
-如果可用，运行文档评审流程，至少覆盖:
+如果运行环境支持 `compound-engineering:document-review` skill，可运行文档评审，审查 PRD.md 的:
 
 - coherence: 是否前后矛盾；
 - product-lens: 是否解决真正的问题；
-- scope-guardian: 是否范围膨胀；
-- feasibility: 是否给 Design/Tech 留下无法承接的空洞。
+- scope-guardian: 是否范围膨胀。
 
-注意: feasibility 在 Define 阶段只检查“是否无法承接”，不得把 PRD 改成技术方案。
+注意: 不要在 Define 阶段检查 feasibility——PRD 不含技术内容，无法评估”是否无法承接”。
 
 ### Step 7: 逐段确认
 
@@ -365,8 +364,25 @@ PRD 写作要求:
 
 - 将 frontmatter 改为 `status: confirmed`；
 - 写入 `confirmed_at: YYYY-MM-DDTHH:mm:ssZ`；
-- 将“确认记录”的 5 组全部改为“已确认”；
+- 将”确认记录”的 5 组全部改为”已确认”；
+- 创建或更新 `.vibespec/state.json`，写入 Phase 1 完成记录（供 Phase 2 通过协议读取，不为 Phase 1 内部所用）；
 - 输出 Define 完成摘要。
+
+`.vibespec/state.json` 最小写入内容:
+
+```json
+{
+  “phases”: {
+    “define”: {
+      “status”: “confirmed”,
+      “artifact”: “docs/vibespec/PRD.md”,
+      “confirmedAt”: “YYYY-MM-DDTHH:mm:ssZ”
+    }
+  }
+}
+```
+
+如果 state.json 已存在（例如 recover 场景），只更新 `phases.define`，保留其他 phase 的已有记录。
 
 完成摘要格式:
 
