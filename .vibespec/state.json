@@ -1,0 +1,9 @@
+{
+  "phases": {
+    "define": {
+      "status": "confirmed",
+      "artifact": "docs/vibespec-councilkit/PRD.md",
+      "confirmedAt": "2026-06-12T17:30:00Z"
+    }
+  }
+}
