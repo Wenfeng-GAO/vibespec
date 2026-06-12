@@ -30,8 +30,10 @@ Define 阶段完成的唯一标准是:
 
 ### 产物
 
-- 主产物: `docs/vibespec/PRD.md`（自动创建 `docs/vibespec/` 目录）
-- 辅助产物: `docs/phase1-define-notes.md`（强制——用于 checkpoint 恢复和研究持久化）
+- 主产物: `docs/vibespec/{project-slug}/PRD.md`（自动创建目录）
+- 辅助产物: `docs/vibespec/{project-slug}/phase1-define-notes.md`（强制——用于 checkpoint 恢复和研究持久化）
+
+`{project-slug}` 由用户的产品名称生成（kebab-case），例如产品名 "CouncilKit" 对应 `council-kit`。如果用户未提供产品名称，在 Step 0 获取一句话想法后立即确定 project-slug。
 
 Phase 1 使用 `PRD.md` frontmatter 作为内部状态机制（8 步工作流中的状态追踪）。不创建 `.vibespec/state.json` 作为内部状态机——但在 Step 8 完成时会写入最小条目，供 Phase 2 通过标准协议获知 Define 阶段已完成。
 
@@ -67,8 +69,14 @@ Phase 1 使用 `PRD.md` frontmatter 作为内部状态机制（8 步工作流中
 - `AGENTS.md`
 - `README.md`
 - `docs/` 下与产品、工作流、阶段 1、PRD 相关的文档
-- 已存在的 `PRD.md`
-- 已存在的 `docs/phase1-define-notes.md`
+- 已存在的 `docs/vibespec/{project-slug}/PRD.md`
+- 已存在的 `docs/vibespec/{project-slug}/phase1-define-notes.md`
+
+如果用户未在调用时提供产品名称，先确定 project-slug:
+
+> 你想定义的产品叫什么名字？我会用它来组织产物文件。
+
+确定 project-slug 后，自动创建 `docs/vibespec/{project-slug}/` 目录。
 
 如果 `PRD.md` 已存在:
 
@@ -116,7 +124,14 @@ Phase 1 使用 `PRD.md` frontmatter 作为内部状态机制（8 步工作流中
 | 风险与假设 | 用户风险、市场风险、体验风险、合规/数据风险、未验证假设 |
 | 对标模式 | 竞品/同类工具的常见结构、差异化机会、不能盲目照搬的点 |
 
-研究结论写入 `docs/phase1-define-notes.md`（作为 checkpoint，防止会话中断丢失），只用于后续提问和 PRD 草稿，不直接替用户确认 P0/P1。
+研究结论写入 `docs/vibespec/{project-slug}/phase1-define-notes.md`（作为 checkpoint，防止会话中断丢失），只用于后续提问和 PRD 草稿，不直接替用户确认 P0/P1。
+
+#### Step 1 完成标准
+
+- `docs/vibespec/{project-slug}/phase1-define-notes.md` 文件已创建并写入磁盘
+- 文件包含 4 个视角的结构化分析结果（用户与场景、产品边界、风险与假设、对标模式），每个视角有独立章节
+- 文件包含外部/竞品研究结论（如已执行）
+- 如果文件未创建，不得进入 Step 2
 
 ### Step 2: 产品压力测试
 
@@ -340,6 +355,12 @@ PRD 写作要求:
 
 注意: 不要在 Define 阶段检查 feasibility——PRD 不含技术内容，无法评估”是否无法承接”。
 
+#### Step 6 完成标准
+
+- 必须在用户可见的输出中展示自检结果表格，每项标记 Pass 或 Fail
+- Fail 项必须先修正 PRD.md，修正后重新自检直到全部 Pass
+- 不得跳过此步骤直接进入 Step 7 逐段确认
+
 ### Step 7: 逐段确认
 
 不要一次要求用户确认整份 PRD。按以下 5 组逐段确认，每组只展示该组摘要和关键条目。
@@ -375,7 +396,7 @@ PRD 写作要求:
   “phases”: {
     “define”: {
       “status”: “confirmed”,
-      “artifact”: “docs/vibespec/PRD.md”,
+      “artifact”: “docs/vibespec/{project-slug}/PRD.md”,
       “confirmedAt”: “YYYY-MM-DDTHH:mm:ssZ”
     }
   }
