@@ -2,8 +2,13 @@
   "phases": {
     "define": {
       "status": "confirmed",
-      "artifact": "docs/vibespec-councilkit/PRD.md",
+      "artifact": "docs/vibespec/councilkit/PRD.md",
       "confirmedAt": "2026-06-12T17:30:00Z"
+    },
+    "design": {
+      "status": "confirmed",
+      "artifact": "docs/vibespec/councilkit/DESIGN.md",
+      "confirmedAt": "2026-06-16T00:00:00Z"
     }
   }
 }
