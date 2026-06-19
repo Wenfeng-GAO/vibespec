@@ -19,22 +19,6 @@ check() {
   fi
 }
 
-check_count() {
-  local label="$1"
-  local pattern="$2"
-  local expected="$3"
-  local count
-  count=$(grep -c "$pattern" "$SKILL_FILE" || true)
-  if [ "$count" -ge "$expected" ]; then
-    echo "  PASS: $label (found $count, need >= $expected)"
-    PASS=$((PASS + 1))
-  else
-    echo "  FAIL: $label (found $count, need >= $expected)"
-    FAIL=$((FAIL + 1))
-    FAILURES="${FAILURES}\n  - ${label} (found $count, need >= $expected)"
-  fi
-}
-
 echo "=== Phase 2 SKILL.md Validation ==="
 echo ""
 cd "$(dirname "$0")/.."
@@ -50,18 +34,7 @@ check "Frontmatter: description field" '^description:'
 check "Frontmatter: argument-hint field" '^argument-hint:'
 
 echo ""
-echo "[2] Multi-project artifact paths (docs/vibespec/{project-slug}/)"
-check "DESIGN path uses {project-slug}" 'docs/vibespec/{project-slug}/DESIGN.md'
-check "Notes path uses {project-slug}" 'docs/vibespec/{project-slug}/phase2-design-notes.md'
-check "Reads confirmed PRD by {project-slug}" 'docs/vibespec/{project-slug}/PRD.md'
-
-echo ""
-echo "[3] Phase 1 dependency gate"
-check "Requires define confirmed" 'phases.define.status === "confirmed"'
-check "Blocks when Phase 1 incomplete" 'Phase 1 (Define) 尚未完成'
-
-echo ""
-echo "[4] All 7 steps present"
+echo "[2] All 7 steps present (Step 0-6)"
 check "Step 0 exists" '### Step 0:'
 check "Step 1 exists" '### Step 1:'
 check "Step 2 exists" '### Step 2:'
@@ -71,75 +44,129 @@ check "Step 5 exists" '### Step 5:'
 check "Step 6 exists" '### Step 6:'
 
 echo ""
-echo "[5] Hard constraints (7 rules)"
-check "Constraint: no style code" '不写样式代码'
-check "Constraint: no component code" '不写组件代码'
-check "Constraint: no skipping interaction states" '不跳过交互状态'
-check "Constraint: no vague visual description" '不用模糊视觉描述'
-check "Constraint: no DESIGN without routes/pages" '没有路由表不写入 DESIGN.md'
-check "Constraint: no inventing requirements" '不发明 PRD 中不存在的功能需求'
-check "Constraint: no tech selection" '不做技术选型'
+echo "[3] Hard constraints (7 rules)"
+check "Hard constraint 1: no style code" '不写样式代码'
+check "Hard constraint 2: no component code" '不写组件代码'
+check "Hard constraint 3: no skip interaction states" '不跳过交互状态'
+check "Hard constraint 4: no vague visual description" '不用模糊视觉描述'
+check "Hard constraint 5: no route/page list = no write" '没有路由表不写入 DESIGN.md'
+check "Hard constraint 6: no invent PRD features" '不发明 PRD 中不存在的功能需求'
+check "Hard constraint 7: no tech selection" '不做技术选型'
 
 echo ""
-echo "[6] Step 1 research checkpoint gate"
-check "Step 1 has blocking gate (no proceed without file)" '不得进入 Step 2'
-check "Step 1 requires notes file created" '文件已创建并写入磁盘'
-check "Step 1 three perspectives" 'PRD 解读、竞品 UI 模式、设计约束与风险'
+echo "[4] Step 0: Phase 1 state validation"
+check "Step 0 reads state.json" '.vibespec/state.json'
+check "Step 0 validates define confirmed" 'confirmed'
+check "Step 0 blocks if Phase 1 incomplete" '尚未完成'
+check "Step 0 extracts project-slug from artifact path" 'project-slug'
 
 echo ""
-echo "[7] Step 3 coverage scan (14 dimensions)"
-check "Coverage: information architecture" '| 信息架构 |'
-check "Coverage: route completeness" '| 路由完整性 |'
-check "Coverage: page coverage" '| 页面覆盖 |'
-check "Coverage: component structure" '| 组件结构 |'
-check "Coverage: user flows" '| 用户流程 |'
-check "Coverage: loading state" '| Loading 状态 |'
-check "Coverage: empty state" '| Empty 状态 |'
-check "Coverage: error state" '| Error 状态 |'
-check "Coverage: edge cases" '| 边界情况 |'
-check "Coverage: data flow" '| 数据流向 |'
-check "Coverage: visual direction" '| 视觉方向 |'
-check "Coverage: responsive" '| 响应式 |'
-check "Coverage: accessibility" '| 可访问性 |'
-check "Coverage: PRD requirement tracing" '| PRD 需求追踪 |'
+echo "[5] Step 1: Design research (3 perspectives + completion criteria)"
+check "Perspective 1: PRD interpretation" 'PRD 解读与设计需求提取'
+check "Perspective 2: competitor UI" '竞品 UI 模式研究'
+check "Perspective 3: design constraints" '设计约束与风险'
+check "Step 1 completion: notes file created" '已创建'
+check "Step 1 completion: notes file on disk" '写入磁盘'
+check "Step 1 completion: 3 structured perspectives" '独立章节'
+check "Step 1 completion: deferred design questions addressed" '初步设计方向'
+check "Step 1 completion: block if file missing" '不得进入 Step 2'
 
 echo ""
-echo "[8] Step 5 quality gate"
-check "Step 5 requires visible self-check output" '展示自检结果表格'
-check "Step 5 blocking gate" '不得跳过此步骤'
-check "Step 5 requires Pass/Fail marking" '标记 Pass 或 Fail'
+echo "[6] 14-dimension coverage scan"
+check "Coverage 01: info architecture" '信息架构'
+check "Coverage 02: route completeness" '路由完整性'
+check "Coverage 03: page coverage" '页面覆盖'
+check "Coverage 04: component structure" '组件结构'
+check "Coverage 05: user flows" '用户流程'
+check "Coverage 06: loading states" 'Loading 状态'
+check "Coverage 07: empty states" 'Empty 状态'
+check "Coverage 08: error states" 'Error 状态'
+check "Coverage 09: edge cases" '边界情况'
+check "Coverage 10: data flow" '数据流向'
+check "Coverage 11: visual direction" '视觉方向'
+check "Coverage 12: responsive" '响应式'
+check "Coverage 13: accessibility" '可访问性'
+check "Coverage 14: PRD traceability" 'PRD 需求追踪'
 
 echo ""
-echo "[9] Step 6 five-group confirmation"
-check "Confirm group 1" '信息架构与路由表'
-check "Confirm group 2" '页面清单与组件树'
-check "Confirm group 3" '核心用户流程与交互状态'
-check "Confirm group 4" '数据流向与视觉方向'
-check "Confirm group 5" '响应式与可访问性'
+echo "[7] DESIGN.md template sections"
+check "Template: frontmatter phase=design" 'phase: design'
+check "Template: frontmatter status=draft" 'status: draft'
+check "Template: frontmatter prd field" 'prd:'
+check "Template: frontmatter confirmed_at" 'confirmed_at:'
+check "Template: info architecture section" '## 信息架构'
+check "Template: route table section" '## 路由表'
+check "Template: page inventory section" '## 页面清单'
+check "Template: wireframe section" '## 低保真线框图'
+check "Template: component tree section" '## 组件树'
+check "Template: user flows section" '## 核心用户流程'
+check "Template: interaction states section" '## 交互状态'
+check "Template: data flow section" '## 数据流向'
+check "Template: visual direction section" '## 视觉方向'
+check "Template: responsive section" '## 响应式要求'
+check "Template: accessibility section" '## 可访问性要求'
+check "Template: design decision log section" '## 设计决策记录'
+check "Template: defer to tech section" '## 延后到 Tech'
+check "Template: confirmation records section" '## 确认记录'
 
 echo ""
-echo "[10] DESIGN.md template frontmatter"
-check "DESIGN template: phase" 'phase: design'
-check "DESIGN template: status" 'status: draft'
-check "DESIGN template: prd link" 'prd: docs/vibespec/{project-slug}/PRD.md'
-check "DESIGN template: created" 'created: YYYY-MM-DD'
-check "DESIGN template: confirmed_at" 'confirmed_at:'
+echo "[8] Step 5: Quality gate"
+check "Quality gate: show Pass/Fail table" '展示自检结果表格'
+check "Quality gate: block on skip" '不得跳过此步骤'
+check "Quality gate: fix and recheck" '修正后重新自检'
+check "Quality gate: wireframe completeness check" '低保真线框图'
+check "Quality gate: route-page 1:1 check" '一一对应'
 
 echo ""
-echo "[10b] Low-fidelity wireframe requirement"
-check "Wireframe section in template" '## 低保真线框图'
-check "Wireframe required for P0 pages" 'P0 核心页面必须有一个 ASCII 低保真线框图'
-check "Wireframe in Step 5 self-check" 'P0 核心页面都有 ASCII 低保真线框图'
+echo "[9] 5-group confirmation"
+check "Confirm group 1: IA + routes" '信息架构与路由表'
+check "Confirm group 2: pages + components" '页面清单与组件树'
+check "Confirm group 3: flows + states" '核心用户流程与交互状态'
+check "Confirm group 4: data + visual" '数据流向与视觉方向'
+check "Confirm group 5: responsive + a11y" '响应式与可访问性'
 
 echo ""
-echo "[11] State.json update protocol"
-check "state.json design artifact path" 'artifact.*docs/vibespec/{project-slug}/DESIGN.md'
-check "state.json design confirmed status" '"status": "confirmed"'
-check "Preserves Phase 1 define record" '原样保留'
+echo "[10] Step 6: Completion protocol"
+check "Completion: update frontmatter to confirmed" 'status: confirmed'
+check "Completion: ISO 8601 timestamp" 'YYYY-MM-DDTHH:mm:ssZ'
+check "Completion: state.json design entry" 'phases.design'
+check "Completion: preserve existing define record" '原样保留'
+check "Completion: artifact path in state.json" 'DESIGN.md'
+check "Completion: do not auto-start Phase 3" '不要主动开始'
 
 echo ""
-echo "[12] Timestamp guidance (no fabricated precision)"
-check "confirmed_at fallback guidance" 'T00:00:00Z'
+echo "[11] {project-slug} path usage"
+check "DESIGN.md path with project-slug" '{project-slug}/DESIGN.md'
+check "Notes path with project-slug" '{project-slug}/phase2-design-notes.md'
+check "PRD path reference with project-slug" '{project-slug}/PRD.md'
+
+echo ""
+echo "[12] DESIGN.md writing requirements"
+check "Writing: routes cover all pages" '必须覆盖所有用户可达的页面'
+check "Writing: pages 1:1 with routes" '一一对应'
+check "Writing: states cover loading/empty/error" 'loading.*empty.*error'
+check "Writing: quantified visual direction" '具体量化约束'
+check "Writing: decisions have rationale" '记录选择和放弃理由'
+check "Writing: P0 demand tracing" 'P0.*追踪'
+check "Writing: wireframe per P0 page" 'P0 核心页面必须有一个 ASCII'
+
+echo ""
+echo "[13] Interaction rules"
+check "Interaction: one question at a time" '一次只问一个'
+check "Interaction: single-choice preferred" '单选问题'
+check "Interaction: no bulk questions" '一次性抛给用户'
+check "Interaction: design comparison format" '设计方案对比'
+
+echo ""
+echo "[14] Timestamp fallback rule"
+check "Timestamp: ISO 8601 format" 'YYYY-MM-DDTHH:mm:ssZ'
+check "Timestamp: date-only fallback logic" '当天日期'
+
+echo ""
+echo "[15] No code/tech leakage"
+check "No tech selection in role" '不做技术选型'
+check "No tech plan in role" '不进入 Tech Plan'
+check "No framework recommendation" '不推荐框架'
 
 echo ""
 echo "=== Results ==="
