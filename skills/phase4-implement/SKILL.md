@@ -267,7 +267,39 @@ Phase 4 完成的唯一标准是:
 - 验证所有"预期产出"中列出的文件已创建或修改
 - 检查代码遵循 TECH.md 的目录结构和命名约定
 
-手动检查（如 project 尚未初始化 typecheck/lint）:
+#### Step 3.1: MUST-HAVE 逐项验证（EXISTS / SUBSTANTIVE / WIRED）
+
+> 引入自管的逐项验证，补"typecheck 能过但近 stub / 写了却没接线"的盲点。本检查由实现者自管，不新增 agent，全程在 task 允许的文件范围内进行。
+
+对 TASKS.md 该 task「预期产出」中列出的每个文件，按三级判定并记录结果:
+
+1. **EXISTS** — 文件已创建/修改且非空。
+2. **SUBSTANTIVE** — 非占位实现: 文件中有真实逻辑/接线，不是空壳导出、空函数体、`throw new Error('not implemented')`、纯注释占位，且无 TODO/FIXME/HACK/XXX。
+3. **WIRED** — 已被接线使用: 文件中导出的核心符号至少被本 task 范围或已 completed 的前置 task 范围内某处 import/引用；对应 TECH.md 契约（数据模型字段、API 调用签名、组件 props）与定义一致。
+
+判定与赋值:
+
+- 三级全部满足 → `passed`
+- EXISTS 满足但 SUBSTANTIVE 或 WIRED 不满足 → 逐项记 `failed`，并在 evidence 里写明缺哪一级与具体文件/符号
+- 仅在「该文件按设计本就不应被当前范围接线」（如纯类型导出仅供后续 task 引用，且已在 TASKS.md 标注为前置产出）时，WIRED 可记 `n/a` 并注明理由；其余情况 WIRED 必须判定，不允许跳过
+
+机械化优先: 判定基于「文件存在 + 无 placeholder + 不引用未实现模块（除已标前置 task）+ 符号被 import + 字段/签名匹配 TECH.md」，不做主观行为级判断，避免自评变软。
+
+在 state.json 中记录（见 `state.json 完整格式` 一节的 `selfCheck.evidence`）:
+
+```json
+"selfCheck": {
+  "result": "passed | failed",
+  "evidence": [
+    { "file": "src/services/auth.ts", "exists": true, "substantive": true, "wired": true },
+    { "file": "src/lib/token.ts", "exists": true, "substantive": true, "wired": "n/a", "wiredReason": "纯类型导出，供 T5 引用，已在 TASKS.md 标注前置" }
+  ]
+}
+```
+
+任一文件 `failed`（非 `n/a`）→ 本 task 自检未通过，进入 Step 4「自检未通过」分支，`consecutiveFailures` +1。
+
+#### Step 3 其余手动检查（如 project 尚未初始化 typecheck/lint）:
 
 - TypeScript: 无显式类型错误（用 IDE 或人工 review 判断）
 - 导入路径: 所有 import 路径存在且正确
@@ -276,7 +308,8 @@ Phase 4 完成的唯一标准是:
 #### Step 3 完成标准
 
 - 所有自检项有明确 pass/fail 结果
-- Fail 项有具体说明
+- MUST-HAVE 逐项 evidence 已记录（EXISTS/SUBSTANTIVE/WIRED，每文件一档）
+- Fail 项有具体说明（含失败文件与缺失等级）
 
 ### Step 4: 记录结果与确定下一步
 
@@ -289,7 +322,16 @@ Phase 4 完成的唯一标准是:
   "phases": {
     "implement": {
       "tasks": {
-        "T{N}": {"status": "completed", "completedAt": "ISO8601"}
+        "T{N}": {
+          "status": "completed",
+          "completedAt": "ISO8601",
+          "selfCheck": {
+            "result": "passed",
+            "evidence": [
+              { "file": "{file}", "exists": true, "substantive": true, "wired": true }
+            ]
+          }
+        }
       },
       "consecutiveFailures": 0
     }
@@ -320,7 +362,13 @@ Phase 4 完成的唯一标准是:
           "status": "failed",
           "failedAt": "ISO8601",
           "reason": "{具体失败原因}",
-          "attempt": N
+          "attempt": N,
+          "selfCheck": {
+            "result": "failed",
+            "evidence": [
+              { "file": "{file}", "exists": true, "substantive": false, "wired": "failed", "wiredReason": "{缺哪一级/具体符号}" }
+            ]
+          }
         }
       },
       "consecutiveFailures": N
@@ -409,8 +457,28 @@ Phase 4 阶段 state.json 格式:
       "status": "in-progress | completed | human-intervention-needed",
       "artifact": "docs/vibespec/{project-slug}/TASKS.md",
       "tasks": {
-        "T1": {"status": "completed", "completedAt": "ISO8601"},
-        "T2": {"status": "failed", "failedAt": "ISO8601", "reason": "...", "attempt": 1},
+        "T1": {
+          "status": "completed",
+          "completedAt": "ISO8601",
+          "selfCheck": {
+            "result": "passed",
+            "evidence": [
+              { "file": "src/{path}", "exists": true, "substantive": true, "wired": true }
+            ]
+          }
+        },
+        "T2": {
+          "status": "failed",
+          "failedAt": "ISO8601",
+          "reason": "...",
+          "attempt": 1,
+          "selfCheck": {
+            "result": "failed",
+            "evidence": [
+              { "file": "src/{path}", "exists": true, "substantive": false, "wired": true }
+            ]
+          }
+        },
         "T3": {"status": "pending"}
       },
       "consecutiveFailures": 1,
