@@ -82,7 +82,7 @@ Phase 4 完成的唯一标准是:
 
 以下规则不可跳过:
 
-1. 不一次改动过大范围。每个 task 只修改一个逻辑层或功能区域，最多 3-5 个文件。
+1. 不一次改动过大范围。每个 task 只修改一个逻辑层或功能区域，最多 3-5 个文件。**弹性偏离**: 某些逻辑单元天然文件数偏多——项目脚手架（package.json/tsconfig/vite.config/biome.json/index.html 等配置簇）、多实体数据模型层（一个 task 内的多个紧密耦合实体定义）。这类场景允许超出 cap，但必须: ① 在 TASKS.md 的 task 定义中**预先**声明"预期文件数 ≥ N 及理由"（脚手架/多实体/…）；② 在 state.json selfCheck 的 `scopeNote` 里记录实际文件数与偏离理由；③ 不得借此把多个独立逻辑单元塞进一个 task。未预先声明的超 cap 仍按越界失败处理（faultType=out-of-scope）。
 2. 不在完成代码中留 TODO、FIXME、HACK、XXX 等占位符注释。未完成的部分不属于当前 task 范围。
 3. 不跨 task 随意跳转。完成当前 task 后再考虑下一个。
 4. 不忽略验证命令。必须执行验证命令并记录输出，不能"假设通过"。
@@ -279,6 +279,8 @@ Phase 4 完成的唯一标准是:
 - 检查无 TODO/FIXME/HACK/XXX 占位符注释
 - 检查所有文件在 task 允许修改范围内
 
+**验证命令等价性条款**: TECH.md 中约定的验证命令（如 `pnpm typecheck`/`pnpm lint`）受仓库工具链状态影响可能无法原样执行（如包管理器版本策略冲突、前置 deps-check 阻塞 `run` 脚本、依赖未装等）。遇到时**必须以语义等价的可执行命令替代并记录偏离**（如 `./node_modules/.bin/tsc --noEmit` 替代 `pnpm typecheck`、`./node_modules/.bin/biome check src` 替代 `pnpm lint`），在 state.json selfCheck 里记录"约定命令 → 实际命令 → 通过/失败"，不得因约定命令不可执行而跳过自检或假设通过。等价命令必须真实运行并捕获退出码。
+
 预期产出检查:
 
 - 验证所有"预期产出"中列出的文件已创建或修改
@@ -287,20 +289,25 @@ Phase 4 完成的唯一标准是:
 #### Step 3.1: MUST-HAVE 逐项验证（EXISTS / SUBSTANTIVE / WIRED）
 
 > 引入自管的逐项验证，补"typecheck 能过但近 stub / 写了却没接线"的盲点。本检查由实现者自管，不新增 agent，全程在 task 允许的文件范围内进行。
+>
+> **与 Step 3.5 的分工**: Step 3.1 只判"本次产出**是否为占位/未接线**"（事实判定，机械化）；它**不判**"这个占位是否合理（如按依赖顺序该延期到后续 task）"。后者是任务归属问题，超出 Step 3.1 能力，交给 Step 3.5 验收型审查判定。即: Step 3.1 抓占位 → 若累积到升级窗口，Step 3.5 判占位是否归属错位并给 rescope 建议。两者互补，缺一则占位会被无条件算失败。
 
 对 TASKS.md 该 task「预期产出」中列出的每个文件，按三级判定并记录结果:
 
 1. **EXISTS** — 文件已创建/修改且非空。
 2. **SUBSTANTIVE** — 非占位实现: 文件中有真实逻辑/接线，不是空壳导出、空函数体、`throw new Error('not implemented')`、纯注释占位，且无 TODO/FIXME/HACK/XXX。
-3. **WIRED** — 已被接线使用: 文件中导出的核心符号至少被本 task 范围或已 completed 的前置 task 范围内某处 import/引用；对应 TECH.md 契约（数据模型字段、API 调用签名、组件 props）与定义一致。
+3. **WIRED** — 已被接线使用。据文件性质分以下判据（任一成立即 passed）:
+   - **代码符号型**: 文件导出的核心符号至少被本 task 范围或已 completed 的前置 task 范围内某处 import/引用；对应 TECH.md 契约（数据模型字段、API 调用签名、组件 props）与定义一致。
+   - **工具消费型（配置/入口）**: 文件不是被代码 import，而是被构建/lint/类型工具消费——如 `package.json`、`tsconfig.json`、`vite.config.ts`、`biome.json`、`tailwind.config.ts`、`postcss.config.js`、`index.html`。判定为 wired 的条件是**相应工具成功解析执行**（`tsc --noEmit` 读取 tsconfig、`vite build` 读取 vite.config/index.html、`biome check` 读取 biome.json 均通过）。证据须记"被 {工具} 成功解析"。
+   - **层 API 导出型（self-wired）**: 文件是分层架构中供上层（后续 task）调用的 API 边界——如数据访问层 CRUD（`db.ts` 的 `addRoom`/`getRoom`…）、服务注册表（`getModelService`/`registerModelService`）、单例入口（`db` 单例实例化）。这类文件在本 task 内无业务调用者属**正常**。判定为 wired 的条件是: 导出符号有真实实现（已过 SUBSTANTIVE）且其调用方明确归属已规划 task（在 TASKS.md 的前置依赖链中可指明）。证据须记"层 API，调用方属 T{x}"。
 
 判定与赋值:
 
 - 三级全部满足 → `passed`
 - EXISTS 满足但 SUBSTANTIVE 或 WIRED 不满足 → 逐项记 `failed`，并在 evidence 里写明缺哪一级与具体文件/符号
-- 仅在「该文件按设计本就不应被当前范围接线」（如纯类型导出仅供后续 task 引用，且已在 TASKS.md 标注为前置产出）时，WIRED 可记 `n/a` 并注明理由；其余情况 WIRED 必须判定，不允许跳过
+- WIRED 可记 `n/a` 仅限: 「该文件按设计本就不应被当前范围接线」（如纯类型导出仅供后续 task 引用，且已在 TASKS.md 标注为前置产出）。其余情况 WIRED 必须按上述三类判据之一判定，不允许跳过。
 
-机械化优先: 判定基于「文件存在 + 无 placeholder + 不引用未实现模块（除已标前置 task）+ 符号被 import + 字段/签名匹配 TECH.md」，不做主观行为级判断，避免自评变软。
+机械化优先: 判定基于「文件存在 + 无 placeholder + 不引用未实现模块（除已标前置 task）+ 符号被 import 或被工具成功解析 或 为有明确调用方归属的层 API + 字段/签名匹配 TECH.md」，不做主观行为级判断，避免自评变软。
 
 在 state.json 中记录（见 `state.json 完整格式` 一节的 `selfCheck.evidence`）:
 
