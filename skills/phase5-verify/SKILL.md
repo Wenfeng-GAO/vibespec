@@ -20,7 +20,7 @@ argument-hint: "[vt-id / continue / retry / status / confirm]"
 - **Phase 1-3**: 单 session，线性工作流，产出单个文档，不写代码。
 - **Phase 5**: 多 session，每次调用执行一个 VT，证据追加进 VERIFY.md，每个 VT 在 fresh context 中运行。
 
-Phase 5 的门禁是**人工确认**——不是 checklist 自检可关闭的。所有 VT 有明确 verdict（passed/failed/static-fallback/blocking）才进入人工确认环节。
+Phase 5 的门禁是**人工确认**——不是 checklist 自检可关闭的。所有 VT 有明确 verdict（passed/defect/deferred-coverage/static-fallback/blocking）才进入人工确认环节。
 
 Phase 5 完成的唯一标准是:
 
@@ -90,11 +90,14 @@ VT4/VT5/VT7 为"需实跑 VT"；VT1/VT2/VT3/VT6 为"可静态判定 VT"。
 每 VT 自检后赋一个 verdict:
 
 - `passed` — 该维度证据齐全，实现满足契约。
-- `failed` — 该维度有明确缺口（如某 P0 需求无代码回溯、某交互状态缺实现、typecheck 失败）。failed VT 触发回退: 生成 `FT{N}` 回 Phase 4。
+- `defect` — 该维度有**真实缺口或回归**（如某 P0 需求本应已实现却无代码回溯、已实现组件缺交互状态、typecheck 失败、回归 bug）。defect VT 触发回退: 生成 `FT{N}` 回 Phase 4，**计入 `consecutiveFailures`**。
+- `deferred-coverage` — 该维度缺口**根因是产品未完成范围**（对应 task 尚在 T{n+} 未执行，非已实现代码的缺陷）。典型: 局部/增量验证（`scope.partialCoverage`）下，VT 维度依赖尚未实现的 task。deferred-coverage **不计入 `consecutiveFailures`**，不触发逐 VT 回退；改为在 VERIFY.md 汇总"待实现覆盖"清单，建议**批量**回 Phase 4 继续执行 T{n+}，而非逐缺陷生成 FT。
 - `static-fallback` — 仅用于需实跑 VT 在能力受限时: 无浏览器/视觉工具，转为静态启发式检查（如确认 a11y 属性存在、响应式断点类存在、视觉变量与 DESIGN 一致），并在 VERIFY.md 显式标注"未实跑，证据为静态启发式"作为已知缺口。static-fallback **不算 fail**，不触发回退，但必须在人工确认时被知晓。
 - `blocking` — VT 因前置 VT 未完成或环境阻断无法判定（如 VT7 依赖 VT6 的 build 先过）。blocking 不计入失败，但阻塞确认，须先解前置。
 
-**反模式防御**: 需实跑 VT 不允许在"未尝试任何实跑、也未记录静态启发式依据"的情况下直接判 passed 或 static-fallback。static-fallback 必须附静态启发式的具体判定依据（哪些类/属性/变量被核对通过），不得空判。
+**根因判定（defect vs deferred-coverage）**: 赋 verdict 时即时判定，不等到 Step 3.5 兜底。判据: 若该 VT 维度对应的需求/页面/状态**已在 TASKS.md 的已完成 task 范围内**却未达成 → `defect`（已实现代码有缺陷/遗漏）；若对应实现**明确落在尚未执行的 T{n+}** → `deferred-coverage`（产品未到那步，不是 bug）。拿不准时记 `defect` 并附理由（宁可走修复，不掩盖真缺口），但须在证据段写明判定依据。Step 3.5 验收型审查可在 `consecutiveFailures==2` 时复核此判定（如把误判的 deferred-coverage 改判、或把误判的 defect 升级）。
+
+**反模式防御**: 需实跑 VT 不允许在"未尝试任何实跑、也未记录静态启发式依据"的情况下直接判 passed 或 static-fallback。static-fallback 必须附静态启发式的具体判定依据（哪些类/属性/变量被核对通过），不得空判。deferred-coverage 不得滥用为"偷懒不验证"——必须先实查代码确认缺口确属未实现范围，并指到对应未执行 task ID。
 
 ## 硬约束
 
@@ -105,17 +108,18 @@ VT4/VT5/VT7 为"需实跑 VT"；VT1/VT2/VT3/VT6 为"可静态判定 VT"。
 3. 不跳过需实跑 VT。VT4/VT5/VT7 必须先尝试实跑；实跑不可用才降级 static-fallback 并附依据。
 4. 不越过上游。VERIFY.md 只记录验证发现与修复 task 建议，**不直接改实现代码**；修复必须经 Phase 4 的 FT 执行。
 5. 不把测试通过等同于用户验收。VT6 跑通测试只是工程维度证据，不取代 VT7 浏览器 QA 与最终人工确认。
-6. 连续 failed 超过 2 次不自动重试。第 3 次连续 failed 时标记 `human-intervention-needed` 并停止。
-7. 不隐藏未解决问题。VERIFY.md 的「未解决问题」节必须如实列全部 failed/blocking/static-fallback 缺口。
+6. 连续 `defect` 超过 2 次不自动重试。第 3 次连续 `defect` 时标记 `human-intervention-needed` 并停止。**仅 `defect` 计入 `consecutiveFailures`**；`deferred-coverage`、`static-fallback`、`blocking` 不计入（前者是产品未完成非缺陷，后者是降级/前置阻塞）。
+7. 不隐藏未解决问题。VERIFY.md 的「未解决问题」节必须如实列全部 `defect`/`blocking`/`static-fallback` 缺口；`deferred-coverage` 单列「待实现覆盖」节，指到对应未执行 task ID。
 8. 不跳过自检。必须在 state.json 记录每 VT 的 verdict 与证据指针；`confirm` 前所有 VT 须为终态。
 
 ## 交互规则
 
 - 每次调用只执行一个 VT。
 - 执行前宣布 VT 目标、维度、判定方式（静态 / 实跑 / 降级）。
-- VT failed 时不做诊断对话——记录缺口与建议的 FT 范围在 state.json，更新失败计数，停止。
-- 连续 3 次 failed 时明确告知用户:"连续 3 个 VT 失败，需要人工介入。最后失败的 VT: VT{N}。"并给失败类型序列与定向建议。
-- `consecutiveFailures == 2` 的 failed 会触发 Step 3.5 升级前对抗审查；审查只产结构化 findings 写入 state.json，不自动修复、不绕过计数。
+- VT 判 `defect` 时不做诊断对话——记录缺口与建议的 FT 范围在 state.json，`consecutiveFailures` +1，生成 FT 回 Phase 4。
+- VT 判 `deferred-coverage` 时——记录缺口与对应未执行 task ID 在 state.json，**不计数、不生成单 FT**，并入「待实现覆盖」清单；提示用户该维度待 Phase 4 继续执行 T{n+}。
+- 连续 3 次 `defect` 时明确告知用户:"连续 3 个 VT 判为 defect（真实缺口），需要人工介入。最后: VT{N}。"并给 defect 类型序列与定向建议。
+- `consecutiveFailures == 2` 的 `defect` 会触发 Step 3.5 升级前对抗审查；审查只产结构化 findings 写入 state.json，不自动修复、不绕过计数，可复核 defect/deferred-coverage 根因判定。
 - `status` 模式只输出进度概览，不执行任何 VT。
 - `confirm` 仅在所有 VT 终态（passed/static-fallback，无 failed/blocking）时可用；否则告知阻塞项。
 
@@ -152,7 +156,7 @@ VT4/VT5/VT7 为"需实跑 VT"；VT1/VT2/VT3/VT6 为"可静态判定 VT"。
 
 如果 `phases.verify.status === "human-intervention-needed"`:
 
-- 检查最近 failed VT、verdict 与失败类型序列
+- 检查最近 defect VT、verdict 与 defect 类型序列
 - 若触发过 Step 3.5 审查，附 verdict 与 findings 摘要
 - 报告状态，询问下一步
 
@@ -174,7 +178,11 @@ VT4/VT5/VT7 为"需实跑 VT"；VT1/VT2/VT3/VT6 为"可静态判定 VT"。
 
 ### Step 0a: 拆 VT（仅首次 / VERIFY.md 缺失时）
 
-按「VT 维度拆分」生成 7 个 VT（缺项按项目裁剪并声明）。写入 state.json 的 `phases.verify` 段:
+按「VT 维度拆分」生成 7 个 VT（缺项按项目裁剪并声明）。
+
+**验证范围声明（反馈 #3）**: 若本次 Phase 5 针对的是**部分完成**的实现（`phases.implement.tasks` 中仍有 pending/未执行 task，非全量 completed），须在 `phases.verify.scope.partialCoverage: true` 显式声明，并记录 `coveredTasks`（如 T1-T4）。局部验证下，维度依赖未执行 task 的 VT 会判 `deferred-coverage`（见 verdict 判定），不计入失败预算。全量验证（implement 全 completed）时 `partialCoverage: false`，所有缺口一律按 `defect` 处理。
+
+写入 state.json 的 `phases.verify` 段:
 
 ```json
 {
@@ -233,29 +241,30 @@ VT4/VT5/VT7 为"需实跑 VT"；VT1/VT2/VT3/VT6 为"可静态判定 VT"。
 
 对 VT2（页面路由）等需逐条核验的 VT，参照 Phase 4 Step 3.1 的机械化判定: 每条契约条目须有明确的"通过（指到代码位置）/ 缺口（标注缺什么）"结论，不得整体含糊判过。
 
-赋 verdict:
+赋 verdict（详见「三类 verdict 判定」根因规则）:
 
 - 全部条目通过、证据齐全 → `passed`
-- 任一条目缺口 → `failed`，证据段记录缺口与建议修复范围
+- 任一条目缺口，且根因是已实现代码的缺陷/遗漏（对应需求在已完成 task 范围内）→ `defect`，证据段记录缺口、缺陷位置、建议 FT 范围
+- 任一条目缺口，但根因是产品未完成范围（对应实现落在未执行 T{n+}）→ `deferred-coverage`，证据段记录缺口 + 指到的未执行 task ID
 - 需实跑 VT 且实跑不可用、静态启发式依据充分 → `static-fallback`，证据段标注降级与依据
 - 前置未满足（如 VT7 但 VT6 build 未过）→ `blocking`，说明前置
 
 #### Step 3 完成标准
 
 - 该 VT 证据段已写入 VERIFY.md
-- verdict 已判定且可指认依据（passed 指到证据行，failed 指到缺口，static-fallback 指到启发式核对清单）
-- state.json `vts.VT{N}` 已更新 verdict + evidencePointer
+- verdict 已判定且可指认依据（passed 指到证据行，defect/deferred-coverage 指到缺口+根因判定依据，static-fallback 指到启发式核对清单）
+- state.json `vts.VT{N}` 已更新 verdict + evidencePointer + （defect 的）fixTask / （deferred-coverage 的）pendingTaskId
 
-### Step 3.5: 升级前对抗审查（仅 `consecutiveFailures == 2` 且本轮 failed 时触发）
+### Step 3.5: 升级前对抗审查（仅 `consecutiveFailures == 2` 且本轮为 `defect` 时触发）
 
-与 Phase 4 Step 3.5 同构。事件触发，非每 VT 门禁。目的: 升级到人工前的最后一搏，判该 VT 真该升人工还是验证判得过严（如 static-fallback 误判为 failed、或缺口实为已在前置 task 覆盖）。
+与 Phase 4 Step 3.5 同构。事件触发，非每 VT 门禁。目的: 升级到人工前的最后一搏，判该 VT 真该升人工还是验证判得过严（如 static-fallback 误判为 defect、或缺口实为已在前置 task 覆盖、或 defect 实为 deferred-coverage 误判）。
 
 触发条件（缺一不可）:
 
-1. 本轮 VT verdict === failed；
+1. 本轮 VT verdict === `defect`（仅 defect 计数，故只有 defect 能触发）；
 2. 计入后 `consecutiveFailures` 恰好 == 2。
 
-派盲型（仅 diff + 该 VT 证据段，不给上游 spec）+ 验收型（证据段 + 对应 PRD/DESIGN 契约）两视角。verdict ∈ `issue-real`（缺口真实，坐实回退）/ `self-check-too-soft`（实为已覆盖，缺口判得过严→建议改判 passed 或 static-fallback）/ `should-escalate`（确该升人工）。
+派盲型（仅 diff + 该 VT 证据段，不给上游 spec）+ 验收型（证据段 + 对应 PRD/DESIGN 契约 + TASKS.md 依赖链）三视角可用。verdict ∈ `issue-real`（缺口真实，坐实回退）/ `self-check-too-soft`（实为已覆盖，判得过严→建议改判 passed 或 static-fallback）/ `should-escalate`（确该升人工）/ `mis-rooted`（defect 实为 deferred-coverage 误判→建议改判并撤销 FT，不计数）。
 
 降级规则同 Phase 4: runtime 不可调度第二 LLM → `scope: single-fallback`；完全不可用 → `scope: unavailable` 跳过不阻塞。审查只读、只产结构化 findings 写 state.json，不自动改 verdict、不绕过计数、不直接改代码（守硬约束 #4）。
 
@@ -269,18 +278,19 @@ VT4/VT5/VT7 为"需实跑 VT"；VT1/VT2/VT3/VT6 为"可静态判定 VT"。
 
 停止，等待下次调用。
 
-#### VT failed（生成 fix task，阶段往返）
+#### VT defect（生成 fix task，阶段往返）
 
 1. 向 `TASKS.md` 追加 `FT{N}` fix task:
 
 ```markdown
 ## FT{N}: 修复 VT{M} {维度} 缺口
 
-- 来源: Phase 5 VT{M} 集成验证
-- 失败证据: {VERIFY.md 对应节缺口描述}
+- 来源: Phase 5 VT{M} 集成验证（defect）
+- 根因: 已实现代码的缺陷/遗漏（对应需求在已完成 task 范围内）
+- 失败证据: {VERIFY.md 对应节缺口描述 + 缺陷位置}
 - 允许修改范围: {根据缺口推断的文件/目录}
 - 验证方式: {重跑 VT{M} 应通过}
-- 对应需求: {R1...}
+- 对应需求: {R1...} | 对应原 task: {T{n}（已 completed）}
 ```
 
 2. 更新 state.json:
@@ -291,7 +301,7 @@ VT4/VT5/VT7 为"需实跑 VT"；VT1/VT2/VT3/VT6 为"可静态判定 VT"。
     "implement": { "status": "in-progress", "resumedFromVerify": true },
     "verify": {
       "status": "blocked",
-      "vts": { "VT{N}": { "status": "failed", "verdict": "failed", "failedAt": "ISO8601", "reason": "...", "fixTask": "FT{N}" } },
+      "vts": { "VT{N}": { "status": "failed", "verdict": "defect", "failedAt": "ISO8601", "reason": "...", "fixTask": "FT{N}", "defectTask": "T{n}" } },
       "consecutiveFailures": 1,
       "pendingFixTasks": ["FT{N}"]
     }
@@ -301,31 +311,60 @@ VT4/VT5/VT7 为"需实跑 VT"；VT1/VT2/VT3/VT6 为"可静态判定 VT"。
 
 `phases.verify.status` 退回 `blocked`，`phases.implement.status` 退回 `in-progress`。
 
-> VT{N} failed: {缺口}。已生成 FT{N} 回到 Phase 4。
+> VT{N} defect: {缺口}（根因: 已实现代码缺陷）。已生成 FT{N} 回到 Phase 4。
 > 请切换到 Phase 4 执行 FT{N}（`continue`），跑完后再回 Phase 5 `retry VT{N}`。
 
 停止。用户在 Phase 4 跑完 FT 后回 Phase 5。
 
-若 `consecutiveFailures >= 3`:
+若 `consecutiveFailures >= 3`（仅 defect 累积）:
 
 ```json
 { "phases": { "verify": { "status": "human-intervention-needed" } } }
 ```
 
-> ⚠️ 连续 3 个 VT 失败，需要人工介入。
-> 失败类型序列: {verdict/faultType 序列}
+> ⚠️ 连续 3 个 VT 判为 defect（真实缺口），需要人工介入。
+> defect 序列: {verdict 序列}
 > {若末次触发 Step 3.5，附 verdict 解读}
 > 建议: 检查是否实现与 spec 系统性偏离、或验证维度本身需调整。
 
+#### VT deferred-coverage（不计数，不回退，汇总待实现）
+
+不生成单 FT，不退回阶段状态，`consecutiveFailures` 不变。把缺口并入 VERIFY.md「待实现覆盖」节与 state.json `pendingCoverage`:
+
+```json
+{
+  "phases": {
+    "verify": {
+      "vts": { "VT{N}": { "status": "completed", "verdict": "deferred-coverage", "evidencePointer": "...", "pendingTaskId": "T{n+}", "reason": "维度依赖未执行的 T{n+}" } },
+      "pendingCoverage": ["VT{N} → T{n+}"]
+    }
+  }
+}
+```
+
+> VT{N} deferred-coverage: {维度} 缺口根因是 T{n+} 尚未实现（非已实现代码缺陷）。
+> 已记入「待实现覆盖」清单，不消耗失败预算。建议: 回 Phase 4 继续执行 T{n+}，完成后再回 Phase 5 重验本 VT。
+
+继续下一个 VT（不停止整轮，除非用户选择回 Phase 4）。
+
+> 注: 若 deferred-coverage 项过多（多数 VT 都指向未实现 task），应提示用户"当前为局部验证，建议先回 Phase 4 完成 T{n+} 再做完整 Phase 5"，而非继续逐 VT 判 deferred-coverage。
+
 #### 全部 VT 终态 → 人工确认
 
-所有 VT 为 `passed` 或 `static-fallback`（无 failed/blocking），更新 state.json `phases.verify.status: "ready-for-confirm"`。
+所有 VT 为 `passed` / `static-fallback` / `deferred-coverage`（无 `defect`/`blocking`），更新 state.json `phases.verify.status: "ready-for-confirm"`。
 
-> 所有 VT 已终态: {passed 数} passed, {static-fallback 数} static-fallback。
-> static-fallback 项（未实跑）: {列举}。请在人工确认时知晓这些缺口。
-> VERIFY.md 已齐备。调用 `confirm` 进入人工确认门禁。
+> 所有 VT 已终态: {passed} passed, {static-fallback} static-fallback, {deferred-coverage} deferred-coverage。
+> static-fallback 项（未实跑）: {列举}。
+> deferred-coverage 项（待实现）: {列举 → T{n+}}。
+> 实跑覆盖率: {passed+实跑 VT 数} / {总 VT 数}。
 
-等待用户 `confirm`。**注意**: static-fallback 项不阻塞确认，但必须在确认前提示用户——这些维度未真正实跑验证。
+**static-fallback 比例门禁（反馈 #2）**: 若 static-fallback VT 占比 > 50%，confirm 前强制提示:
+> ⚠️ 超过半数维度（{N}/{总}）未实跑验证，本次确认仅基于静态启发式。建议在有浏览器能力的环境重跑 VT4/5/7 后再最终确认。
+
+**deferred-coverage 提示**: 若存在 deferred-coverage 项，confirm 前提示:
+> ⚠️ {N} 个维度判为 deferred-coverage（产品未完成范围）。confirm 仅意味"已实现部分通过验证"，不代表产品已完整。建议先回 Phase 4 完成 T{n+} 再做完整 Phase 5。
+
+等待用户 `confirm`。
 
 #### confirm（人工确认门禁）
 
@@ -358,8 +397,10 @@ tasks: docs/vibespec/{project-slug}/TASKS.md
 ## 验证概览
 
 - VT 总数: 7
-- passed: N / static-fallback: N / failed: N / blocking: N
+- passed: N / static-fallback: N / defect: N / deferred-coverage: N / blocking: N
+- 验证范围: 全量 | 局部（partialCoverage，coveredTasks: T1-T{n}）
 - 未实跑(降级)维度: {列举}
+- 实跑覆盖率: {passed+实跑} / {总}
 
 ---
 
@@ -394,12 +435,16 @@ tasks: docs/vibespec/{project-slug}/TASKS.md
 
 ## 未解决问题
 
-- {failed VT 的缺口，每条指到证据节}
+- {defect VT 的缺口，每条指到证据节 + 缺陷位置}
 - {static-fallback 的已知缺口}
+
+## 待实现覆盖（deferred-coverage）
+
+- VT{M} → T{n+}: {维度}缺口根因是 T{n+} 未实现（非缺陷），建议回 Phase 4 完成
 
 ## 修复 task
 
-- FT{N}: 来源 VT{M}, 范围: ...
+- FT{N}: 来源 VT{M}(defect), 缺陷位置: ..., 范围: ...
 ```
 
 ## state.json 完整格式（Phase 5 增量）
@@ -415,15 +460,21 @@ tasks: docs/vibespec/{project-slug}/TASKS.md
     "verify": {
       "status": "in-progress | ready-for-confirm | confirmed | blocked | human-intervention-needed",
       "artifact": "docs/vibespec/{project-slug}/VERIFY.md",
+      "scope": {
+        "partialCoverage": true,
+        "coveredTasks": "T1-T4"
+      },
       "vts": {
         "VT1": { "status": "completed", "verdict": "passed", "evidencePointer": "VERIFY.md#vt1" },
         "VT2": { "status": "completed", "verdict": "static-fallback", "evidencePointer": "VERIFY.md#vt2", "fallbackReason": "无浏览器工具" },
-        "VT3": { "status": "failed", "verdict": "failed", "failedAt": "ISO8601", "reason": "...", "fixTask": "FT1", "review": { "scope": "single-fallback", "verdict": "issue-real" } },
+        "VT3": { "status": "failed", "verdict": "defect", "failedAt": "ISO8601", "reason": "...", "fixTask": "FT1", "defectTask": "T3", "review": { "scope": "single-fallback", "verdict": "issue-real" } },
+        "VT5": { "status": "completed", "verdict": "deferred-coverage", "evidencePointer": "VERIFY.md#vt5", "pendingTaskId": "T8-T10", "reason": "维度依赖未执行的 T8-T10" },
         "VT6": { "status": "pending", "dimension": "自动化测试与工程质量", "kind": "static" }
       },
       "consecutiveFailures": 1,
       "currentVt": "VT3",
       "pendingFixTasks": ["FT1"],
+      "pendingCoverage": ["VT5 → T8-T10"],
       "startedAt": "ISO8601",
       "confirmedAt": "ISO8601"
     }
@@ -434,12 +485,14 @@ tasks: docs/vibespec/{project-slug}/TASKS.md
 status 枚举:
 - `pending`: 未执行
 - `in-progress`: 正在执行
-- `completed`: 已有终态 verdict（passed/static-fallback）
-- `failed`: 缺口待修，已生成 FT
+- `completed`: 已有终态 verdict（passed / static-fallback / deferred-coverage）
+- `failed`: verdict=defect，缺口待修，已生成 FT
 
-阶段往返语义: `verify.status === "blocked"` ⟷ `implement.status === "in-progress"` + `resumedFromVerify: true`。用户在 Phase 4 跑完 FT 后回 Phase 5，`verify` 从 `blocked` 转回 `in-progress`，retry 对应 VT。
+verdict 枚举: `passed` / `defect`（真缺口，计 cf，生成 FT 回退）/ `deferred-coverage`（产品未完成范围，不计 cf，入 pendingCoverage）/ `static-fallback`（实跑降级，不计 cf）/ `blocking`（前置未满足，不计 cf）。
 
-review: 仅 `consecutiveFailures == 2` 的 failed 触发（Step 3.5），记录 scope/verdict/findings；其余 failed 省略。审查只读、只产结构化 findings，不自动改 verdict、不绕过计数、不改代码。
+阶段往返语义（反馈 #5 规范化）: `verify.status === "blocked"` ⟷ `implement.status === "in-progress"` + `resumedFromVerify: true` + `verify.pendingFixTasks` 非空。用户在 Phase 4 跑完 FT 后回 Phase 5，`verify` 从 `blocked` 转回 `in-progress`，retry 对应 VT。defectTask 字段标注缺陷所在的原 task（已 completed），便于追溯。
+
+review: 仅 `consecutiveFailures == 2` 的 `defect` 触发（Step 3.5），记录 scope/verdict/findings；`deferred-coverage` 不触发（不计数）。审查只读、只产结构化 findings，可建议改判（mis-rooted），不自动改 verdict、不绕过计数、不改代码。
 
 ## 反模式防御
 
