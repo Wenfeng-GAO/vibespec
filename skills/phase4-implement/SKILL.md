@@ -38,7 +38,20 @@ Phase 4 完成的唯一标准是:
 
 - `docs/vibespec/{project-slug}/TASKS.md` — task 拆分文档（首次调用时生成）；
 - 代码文件 — 每个 task 在仓库中创建或修改实际实现代码；
-- `.vibespec/state.json` — 每个 task 执行后更新状态、失败计数、完成摘要。
+- `.vibespec/state.json` — 每个 task 执行后更新状态、失败计数、失败原因分类（faultType）、自检 evidence、完成摘要；触发对抗审查时附 review findings。
+
+### faultType 失败分类
+
+自检未通过时，必须从下列有限枚举中选一个最贴近的 `faultType`（自由文本 `reason` 始终作为真源保留，分类只作趋势/升级消息用，不取代 reason）:
+
+- `type-error` — typecheck 报错；
+- `lint-error` — lint 报错；
+- `placeholder-present` — 存在 TODO/FIXME/HACK/XXX；
+- `out-of-scope` — 改了允许范围外文件；
+- `unwired-stub` — Step 3.1 MUST-HAVE 中 SUBSTANTIVE 或 WIRED 不达标（近 stub / 没接线 / 不匹配 TECH 契约）；
+- `dependency-missing` — 引用了尚未实现/未完成的前置模块。
+
+无法明确归入上述任一时用 `uncategorized`，并把 reason 写细。归一化不得误并根因——拿不准就用 `uncategorized`。
 
 `{project-slug}` 从 `.vibespec/state.json` 的 `phases.tech.artifact` 路径中提取。
 
@@ -53,6 +66,7 @@ Phase 4 完成的唯一标准是:
   Step 1: 读取当前 task
   Step 2: 实现
   Step 3: 自检
+  Step 3.5: 升级前对抗审查（仅 consecutiveFailures == 2 且本轮仍失败时触发）
   Step 4: 记录结果 + 确定下一步
 ```
 
@@ -75,7 +89,8 @@ Phase 4 完成的唯一标准是:
 5. 连续失败超过 2 次不自动重试。第 3 次连续失败时，标记 human-intervention-needed 并停止。
 6. 不修改 task 允许修改范围外的文件。特别是 PRD.md、DESIGN.md、TECH.md（上游产物不可修改）。
 7. 不写与 task 无关的代码。"顺带改一下"不属于当前 task 的范围。
-8. 不跳过自检。必须在 state.json 中记录 pass/fail 结果和自检证据。
+8. 不跳过自检。必须在 state.json 中记录 pass/fail 结果、自检证据和失败原因分类（faultType）。
+9. 不做自愈式诊断。对抗审查（Step 3.5）与失败分类只产出结构化证据/findings 写入 state.json，不自动改代码、不替用户做修复决策。
 
 如果你发现自己违反任一规则，立即停止当前输出，说明偏离点，在 state.json 中记录失败原因。
 
@@ -83,8 +98,9 @@ Phase 4 完成的唯一标准是:
 
 - 每次调用只执行一个 task。
 - 执行前宣布 task 目标和允许修改范围。
-- Task 失败时不做诊断对话——记录失败原因在 state.json，更新失败计数，停止。
-- 连续 3 次失败时明确告知用户:"连续 3 个 task 失败，需要人工介入。最后失败的 task: T{N}。请检查 TASKS.md 和 state.json，定位问题后重新调用。"
+- Task 失败时不做诊断对话——记录失败原因 + faultType 在 state.json，更新失败计数，停止。
+- 连续 3 次失败时明确告知用户:升级消息含最后失败 task、失败类型序列（faultType₁→…→₃）与定向建议（详见 Step 4 升级分支）。
+- `consecutiveFailures == 2` 的失败会触发 Step 3.5 升级前对抗审查；审查只产结构化 findings 写入 state.json，不自动修复、不绕过计数。
 - `status` 模式只输出当前进度概览，不执行任何 task。
 
 ## 执行循环
@@ -117,7 +133,8 @@ Phase 4 完成的唯一标准是:
 
 如果 `phases.implement.status === "human-intervention-needed"`：
 
-- 检查上次失败 task 和失败原因
+- 检查最近失败 task、失败原因、faultType 与失败类型序列
+- 若末次失败触发过 Step 3.5 对抗审查，附其 verdict 与 findings 摘要供人工参考
 - 报告状态，询问用户下一步（手动指定 task-id / retry / 修改 TASKS.md）
 
 如果 `phases.implement.status === "completed"`：
@@ -311,6 +328,51 @@ Phase 4 完成的唯一标准是:
 - MUST-HAVE 逐项 evidence 已记录（EXISTS/SUBSTANTIVE/WIRED，每文件一档）
 - Fail 项有具体说明（含失败文件与缺失等级）
 
+### Step 3.5: 升级前对抗审查（仅在 `consecutiveFailures == 2` 且本轮自检未通过时触发）
+
+这是**事件触发的可选 pass，不是每个 task 的强门禁**。目的是在连续失败即将跨过升级阈值（第 3 次）前的最后一搏：判断是真该升人工，还是自检过软导致的误判。借鉴 BMad 的跨视角对抗审查，但压缩到只在最需要第二视角的点上跑。
+
+#### 触发条件（缺一不可）
+
+1. 当前 task 自检 Step 3 `result === failed`（本轮未通过）；
+2. 把本次失败计入后，`consecutiveFailures` 将恰好等于 2（即"再失败一次就升级"的最后窗口）。
+
+不在上述条件时**跳过整个 Step 3.5**，直接进 Step 4 失败分支。第 1、3 次失败均不触发审查——审查不是日常验证，只兜底升级前判别。
+
+#### 审查方式（在本次调用内进行，审查完仍在本文末 STOP）
+
+派两个独立视角的对抗审查（受宿主能力限制：若当前 runtime 无法干净调度第二个 LLM/agent，则降级为单一视角并记录 `scope: "single-fallback"`；若完全不可用则记录 `scope: "unavailable"` 并跳过，不阻塞后续）:
+
+- **盲型（Blind）**：只给审查者**当前 task 的代码 diff**（不给 PRD/DESIGN/TECH 上下文），查实现层 bug、边界遗漏、占位、明显错误。
+- **验收型（Acceptance）**：给审查者**diff + 该 task 在 PRD/TECH 中的契约与验收标准**，查需求/AC 回溯、是否偏离 spec、是否漏接线。
+
+审查者**只读、只输出结构化 findings，不写代码、不改 state 之外任何文件、不防腐上游**。findings 形如:
+
+```json
+"review": {
+  "scope": "blind+acceptance | single-fallback | unavailable",
+  "triggeredAt": "ISO8601",
+  "verdict": "should-escalate | self-check-too-soft | issue-real",
+  "findings": [
+    { "lens": "blind", "severity": "high|med|low", "finding": "{描述}", "file": "{path}" }
+  ]
+}
+```
+
+`verdict`（自检判定辅助，非自动行动）:
+
+- `issue-real` — 审查确认失败是真实实现问题，坐实升级方向；
+- `self-check-too-soft` — 审查认为实现其实基本可用、自检（尤其 WIRED）判得过严 → 在 Step 4 升级消息里提示"或属自检过严，可人工复核证据后再 retry"；
+- `should-escalate` — 审查也判该升 → 升级确属合理。
+
+verdict 仅写进 state.json 供升级消息引用，**不绕过 consecutiveFailures 计数、不自动 retry、不自动修复**（守硬约束 #5 与 #9）。
+
+#### Step 3.5 完成标准
+
+- review 块已写入 state.json（含 scope、verdict、findings），或已记录 `unavailable` 降级；
+- 审查未修改任何代码或上游产物；
+- 进入 Step 4 失败分支（计数将变 2 或触发升级）。
+
 ### Step 4: 记录结果与确定下一步
 
 #### 自检通过
@@ -362,12 +424,18 @@ Phase 4 完成的唯一标准是:
           "status": "failed",
           "failedAt": "ISO8601",
           "reason": "{具体失败原因}",
+          "faultType": "type-error | lint-error | placeholder-present | out-of-scope | unwired-stub | dependency-missing | uncategorized",
           "attempt": N,
           "selfCheck": {
             "result": "failed",
             "evidence": [
               { "file": "{file}", "exists": true, "substantive": false, "wired": "failed", "wiredReason": "{缺哪一级/具体符号}" }
             ]
+          },
+          "review": {
+            "scope": "blind+acceptance | single-fallback | unavailable | <省略(未触发)>",
+            "verdict": "issue-real | self-check-too-soft | should-escalate",
+            "findings": [ { "lens": "blind", "severity": "high", "finding": "...", "file": "..." } ]
           }
         }
       },
@@ -377,7 +445,9 @@ Phase 4 完成的唯一标准是:
 }
 ```
 
-> T{N} 自检未通过。失败原因: {原因}。连续失败: {N}。
+> T{N} 自检未通过。失败原因: {原因}（类型: {faultType}）。连续失败: {N}。
+
+如果本轮把 `consecutiveFailures` 推到 **2**（且 Step 3.5 已执行/已降级），在上一条消息后追加本轮审查 verdict 提示（不自动行动），并 STOP 等待下次调用。
 
 如果 `consecutiveFailures >= 3`:
 
@@ -393,12 +463,23 @@ Phase 4 完成的唯一标准是:
 }
 ```
 
+升级消息必须包含失败类型序列（便于人工快速定位是同一类问题反复还是发散）:
+
 > ⚠️ 连续 3 个 task 失败。需要人工介入。
-> 
+>
 > 最后失败的 task: T{N}
-> 失败原因: {原因}
-> 
-> 建议: 检查 TASKS.md 的 task 拆分是否合理、前置依赖是否满足、允许修改范围是否足够。纠正后重新调用，指定 task-id 继续。
+> 失败原因: {reason}
+> 失败类型序列: {faultType₁ → faultType₂ → faultType₃}（按失败顺序）
+>
+> {若最后一次失败触发了 Step 3.5 审查，附 verdict 与一句解读: 如"前一次失败审查 verdict=self-check-too-soft，或属自检过严，可先人工复核 selfCheck.evidence 后再 retry"。}
+>
+> 建议（按 faultType 定向）:
+> - `unwired-stub` / `dependency-missing` 为主 → 检查 task 拆分与前置依赖是否满足；
+> - `out-of-scope` 为主 → 检查允许修改范围是否设得过小；
+> - `placeholder-present` / `type-error` 为主 → 实现质量问题，复查 TASKS.md 的验证方式是否覆盖；
+> - 序列发散 → 多为 task 拆分本身不合理，建议重拆 TASKS.md。
+>
+> 纠正后重新调用，指定 task-id 继续。
 
 停止，不再自动继续。
 
@@ -471,12 +552,18 @@ Phase 4 阶段 state.json 格式:
           "status": "failed",
           "failedAt": "ISO8601",
           "reason": "...",
+          "faultType": "unwired-stub",
           "attempt": 1,
           "selfCheck": {
             "result": "failed",
             "evidence": [
               { "file": "src/{path}", "exists": true, "substantive": false, "wired": true }
             ]
+          },
+          "review": {
+            "scope": "blind+acceptance",
+            "verdict": "issue-real",
+            "findings": [ { "lens": "acceptance", "severity": "high", "finding": "...", "file": "src/{path}" } ]
           }
         },
         "T3": {"status": "pending"}
@@ -497,3 +584,7 @@ status 枚举:
 - `failed`: 自检未通过
 
 attempt: 失败重试次数（从 1 开始），用于区分"第一次失败"和"重试后仍然失败"
+
+faultType: 失败原因分类（见「faultType 失败分类」枚举），仅作趋势/升级消息用，自由文本 reason 始终为真源。
+
+review: 仅在 `consecutiveFailures == 2` 的失败触发（Step 3.5），记录升级前对抗审查的 scope/verdict/findings；其余失败省略该字段。审查只读、只产结构化 findings，不自动修复、不绕过 consecutiveFailures 计数。
