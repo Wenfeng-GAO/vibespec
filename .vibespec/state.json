@@ -14,6 +14,53 @@
       "status": "confirmed",
       "artifact": "docs/vibespec/councilkit/TECH.md",
       "confirmedAt": "2026-06-22T00:00:00Z"
+    },
+    "implement": {
+      "status": "in-progress",
+      "artifact": "docs/vibespec/councilkit/TASKS.md",
+      "tasks": {
+        "T1": {
+          "status": "completed",
+          "completedAt": "2026-06-24T16:20:00Z",
+          "selfCheck": {
+            "result": "passed",
+            "evidence": [
+              { "file": "package.json", "exists": true, "substantive": true, "wired": true, "wiredReason": "pnpm install 成功解析" },
+              { "file": "tsconfig.json", "exists": true, "substantive": true, "wired": true, "wiredReason": "tsc --noEmit 读取成功" },
+              { "file": "tsconfig.node.json", "exists": true, "substantive": true, "wired": true, "wiredReason": "被 tsconfig.json references 引用" },
+              { "file": "vite.config.ts", "exists": true, "substantive": true, "wired": true, "wiredReason": "vite build/dev 成功解析" },
+              { "file": "tailwind.config.ts", "exists": true, "substantive": true, "wired": true, "wiredReason": "vite build 输出含 Tailwind 编译结果" },
+              { "file": "postcss.config.js", "exists": true, "substantive": true, "wired": true, "wiredReason": "Vite 构建链式读取" },
+              { "file": "biome.json", "exists": true, "substantive": true, "wired": true, "wiredReason": "biome check 成功解析执行" },
+              { "file": "index.html", "exists": true, "substantive": true, "wired": true, "wiredReason": "vite dev/build 入口" },
+              { "file": "lefthook.yml", "exists": true, "substantive": true, "wired": true, "wiredReason": "lefthook install 成功" },
+              { "file": "src/styles/globals.css", "exists": true, "substantive": true, "wired": true, "wiredReason": "Tailwind 指令 + CSS 变量，build 输出含编译结果" },
+              { "file": "src/main.tsx", "exists": true, "substantive": true, "wired": true, "wiredReason": "应用入口，vite dev 渲染 React" },
+              { "file": "src/vite-env.d.ts", "exists": true, "substantive": true, "wired": true, "wiredReason": "tsc --noEmit 类型声明成功" }
+            ]
+          },
+          "scopeNote": "预期文件数 ≥ 10（脚手架配置簇），实际 12 个主文件 + 2 个必要辅助文件（App.tsx、AppShell.tsx）供 typecheck/dev 通过"
+        },
+        "T2": {"status": "pending"},
+        "T3": {"status": "pending"},
+        "T4": {"status": "pending"},
+        "T5": {"status": "pending"},
+        "T6": {"status": "pending"},
+        "T7": {"status": "pending"},
+        "T8": {"status": "pending"},
+        "T9": {"status": "pending"},
+        "T10": {"status": "pending"},
+        "T11": {"status": "pending"},
+        "T12": {"status": "pending"},
+        "T13": {"status": "pending"},
+        "T14": {"status": "pending"},
+        "T15": {"status": "pending"},
+        "T16": {"status": "pending"},
+        "T17": {"status": "pending"}
+      },
+      "consecutiveFailures": 0,
+      "currentTask": "T2",
+      "startedAt": "2026-06-24T16:11:00Z"
     }
   }
 }

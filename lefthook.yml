@@ -1,0 +1,8 @@
+pre-commit:
+  commands:
+    lint:
+      run: pnpm lint:fix
+      stage_fixed: true
+
+    typecheck:
+      run: pnpm typecheck
