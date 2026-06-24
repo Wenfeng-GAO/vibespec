@@ -127,6 +127,20 @@ VT4/VT5/VT7 为"需实跑 VT"；VT1/VT2/VT3/VT6 为"可静态判定 VT"。
 
 ### Step 0: 验证上游与加载状态
 
+#### CR / stale 检测（change router 集成）
+
+进入本 phase 前先检查 `.vibespec/state.json` 的 `phases.{本phase}` 与活跃 CR（详见 `skills/vibespec-change/SKILL.md`）:
+
+1. `stale=false` 且无活跃 CR 涉及本 phase → 正常推进（继续下方原有流程）
+2. `stale=true` 且 `CR.entryPhase == 本phase`（`status=stale-needs-revision`）→ **变更重做模式**: 整 artifact 重做（phase 级粒度，无节级）。重做后局部重确认 → 本 phase `stale=false`、`status=confirmed`，CR→`phase-revised`，下游 phase 转 `stale-verify`。
+3. `stale=true` 且非入口 且 `CR.status==phase-revised`（`status=stale-verify`）→ **re-verify 模式**: 核对本 phase artifact 与修订后上游是否仍一致。一致 → `stale=false`；不一致 → 退回分支2语义触发本 phase 重做。全部下游 re-verify 通过且 stale 清除后 CR→`closed`。
+4. `stale=true` 且非入口 且 `CR.status==confirmed`（`status=stale-pending`）→ **阻止推进**: 提示"因 CR{N} 待入口 phase 重做完成，本 phase 暂不可推进"。停止。
+
+Phase 4 特殊: 分支2/3 对应"核对已实现代码 vs 新 TECH/DESIGN/PRD"，受影响 task 转 `pending-revision`，CR 驱动 FT（不依赖 Phase 5 判 defect）。`status=stale-code-contract` 同分支3语义但产出 FT。
+
+Phase 5 特殊: 若 `stale=true` 涉及 verify（CR 进行中）→ VT 暂停，CR 优先（§7），不确认 VERIFY，先走 CR re-verify。
+
+
 先验证 Phase 4 完成状态:
 
 1. 读取 `.vibespec/state.json`
