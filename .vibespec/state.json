@@ -41,7 +41,16 @@
           },
           "scopeNote": "预期文件数 ≥ 10（脚手架配置簇），实际 12 个主文件 + 2 个必要辅助文件（App.tsx、AppShell.tsx）供 typecheck/dev 通过"
         },
-        "T2": {"status": "pending"},
+        "T2": {
+          "status": "completed",
+          "completedAt": "2026-06-24T16:25:00Z",
+          "selfCheck": {
+            "result": "passed",
+            "evidence": [
+              { "file": "src/types/index.ts", "exists": true, "substantive": true, "wired": "n/a", "wiredReason": "纯类型导出，供 T3-T17 引用，已在 TASKS.md 标注前置" }
+            ]
+          }
+        },
         "T3": {"status": "pending"},
         "T4": {"status": "pending"},
         "T5": {"status": "pending"},
@@ -59,7 +68,7 @@
         "T17": {"status": "pending"}
       },
       "consecutiveFailures": 0,
-      "currentTask": "T2",
+      "currentTask": "T3",
       "startedAt": "2026-06-24T16:11:00Z"
     }
   }
